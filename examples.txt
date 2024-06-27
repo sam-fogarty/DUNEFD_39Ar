@@ -1,0 +1,11 @@
+# example running noise filter on PDHD TPC data
+kx509;voms-proxy-init -noregen -rfc -voms dune:/dune/Role=Analysis
+LD_PRELOAD=$XROOTD_LIB/libXrdPosixPreload.so lar -c noise_filter_protoduneHD.fcl -s root://fndca1.fnal.gov:1094/pnfs/fnal.gov/usr/dune/tape_backed/dunepro//hd-protodune/raw/2024/detector/cosmics/None/00/02/64/96/np04hd_raw_run026496_0046_dataflow0_datawriter_0_20240529T004641.hdf5
+
+# run decoder on PDS data:
+LD_PRELOAD=$XROOTD_LIB/libXrdPosixPreload.so lar -n 1 -c pdhd_daphne2_decoder.fcl root://fndca1.fnal.gov:1094/pnfs/fnal.gov/usr/dune/tape_backed/dunepro//hd-protodune/raw/2024/detector/cosmics/None/00/02/63/45/np04hd_raw_run026345_0000_dataflow0_datawriter_0_20240521T160539.hdf5 -o test.root
+# will output both an ART root file and a flat ntuple kind of file
+
+# example finding files for a particular run
+rucio list-file-replicas hd-protodune:hd-protodune_26345
+
