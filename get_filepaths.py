@@ -12,11 +12,13 @@ def main(run):#, nfile_start, nfile_stop):
 
     #file_keyword='hd-protodune-det-reco'	
     #data_tier = 'full-reconstructed'
-    file_keyword='hd-protodune'
-    data_tier='raw'
-    metacat_query = f'metacat query "files where {run} in core.runs and core.file_format=hdf5 and core.data_tier={data_tier}"'
-    #print(metacat_query)
-    filenames_file = f'{run}_filenames.txt'
+    file_keyword='hd-protodune-det-reco'
+    #data_tier='raw'
+    #Format='hdf5'
+    Format='root'
+    data_tier='full-reconstructed'
+    metacat_query = f'metacat query "files where {run} in core.runs and core.data_tier={data_tier}"'
+    filenames_file = f'{file_keyword}_{run}_filenames_{data_tier}.txt'
     os.system(f'rm {filenames_file}')
     os.system(metacat_query+f' > {filenames_file}')
         
@@ -26,7 +28,8 @@ def main(run):#, nfile_start, nfile_stop):
     with open(filenames_file, 'r') as f:
         for line in f:
             totalLines+=1
-            
+    #location='FNAL_DCACHE'
+    location='DUNE_US_FNAL_DISK_STAGE'
     with open(filenames_file, 'r') as f:
         for k, line in enumerate(f):
             if k % 10 == 0:
@@ -34,10 +37,11 @@ def main(run):#, nfile_start, nfile_stop):
             if line.strip().split(':')[0] == file_keyword:
                 #if i >= nfile_start and i <= nfile_stop:
                 os.system('rm -rf rucio_output.txt')
+                #os.system(f'rucio list-file-replicas {line.strip()}')
                 os.system(f'rucio list-file-replicas {line.strip()} > rucio_output.txt')
                 with open('rucio_output.txt', 'r') as f2:
                     fulltxt=f2.read()
-                filepath = fulltxt.split('DUNE_CERN_EOS:')[-1].strip().split('|')[0].strip()
+                filepath = fulltxt.split(f'{location}:')[-1].strip().split('|')[0].strip()
                 file_list.append(filepath)	
                 i += 1
     if len(file_list) == 0:
