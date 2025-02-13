@@ -80,12 +80,13 @@ void LowEnergyCLMatching_PDHD(){
     channelmap_file.close();
 
     // get list of ART ROOT files to analyze
-    string filelist = "28850_filepaths.txt";
+    string filelist = "28113_filepaths.txt";
     std::vector<std::string> filenames = readFilePaths(filelist);
 
     // get list of ROOT ntuple files with TPC clusters
-    string run = "028850";
-    string singlehit_runlist="/pnfs/dune/scratch/users/lavaut/03684/1/run28850.list";
+    string run = "028113";
+    //string singlehit_runlist="/pnfs/dune/scratch/users/lavaut/03684/1/run28850.list";
+    string singlehit_runlist="/exp/dune/app/users/sfogarty/JUSTIN/PDHD_run28113_500files_1.list";
     //string singlehit_runlist="run28850.list";
     string optag = "pdhddaphne:daq";
     InputTag rawop_tag(optag);
@@ -105,8 +106,8 @@ void LowEnergyCLMatching_PDHD(){
     const double upper_t_window = 600;
     const double z_window = 55.0; // acceptance window in Z around PDS hit for TPC clusters
     const double y_window = 15.0; // acceptance window in Y around PDS hit for TPC clusters
-    const double z_veto = 10.0;
-    const double y_veto = 10.0;
+    const double z_veto = 0.0;
+    const double y_veto = 0.0;
     // misc
     const int baseline_ticks = 50; // how many ticks at start of wvfm to avg for baseline
     int chFound = 0;
@@ -122,27 +123,96 @@ void LowEnergyCLMatching_PDHD(){
     int pds_event_index = 0;
     int charge_event_index = 0;
     std::string identifier;
-    int nfiles = 680;//filenames.size()
-    for (int file_index = 0; file_index < nfiles; file_index++) {
-        cout << "File " << file_index << "/" << nfiles << " processed" << endl;
-        // this block finds the corresponding TPC clusters file
-        std::ifstream singlehit_files(singlehit_runlist);
-        start = filenames[file_index].find("raw_");
-        end = filenames[file_index].find("_datawriter");
-        if (start != std::string::npos && end != std::string::npos && start < end) {
-            identifier = filenames[file_index].substr(start + 4, end - (start + 4));
+    int nfiles = 500;//filenames.size()
+    namespace fs = std::filesystem;
+    std::ifstream singlehit_files(singlehit_runlist);
+    std::string file_line;
+    std::string singlehit_file;
+    int file_index;
+    int loop_index = -1;
+    while (std::getline(singlehit_files, file_line)) {
+	    if (loop_index == nfiles-1){
+		break;
+		}
+	    else{
+		cout << "Processed file " << loop_index << endl;
+		loop_index++;
+		}
+    //for (int file_index = 0; file_index < nfiles; file_index++) {
+	    size_t startPos = file_line.find("singleHit_output_");
+            if (startPos == std::string::npos) {
+                throw std::invalid_argument("Invalid root file name format. Expected to find 'singleHit_output_' in the filename.");
+            }
+            fs::path rootPath(file_line);
+            std::string logFilename = "log_singleHit" + file_line.substr(startPos + 16);
+            //cout << logFilename << endl;
+	    fs::path logPath = rootPath.parent_path() / logFilename;
+            logFilename = logPath.string();
+            size_t pos = logFilename.rfind(".root");
+            if (pos != std::string::npos) {
+                logFilename.replace(pos, 5, ".log");
             } else {
+                throw std::invalid_argument("Invalid root file name format. Expected to find '.root' at the end of the filename.");
+            }
+      
+            std::cout << "Generated log filename: " << logFilename << std::endl;
+            std::ifstream logFile(logFilename);
+            if (!logFile.is_open()) {
+                   throw std::ios_base::failure("Unable to open log file: " + logFilename);
+                                                          continue;
+                                                          }
+            //
+            std::string line;
+	    std::regex pattern(R"(Opened input file \"(.*?)\")"); // Regex to match the required line
+            std::smatch match;
+            std::string orig_filename = "";
+            while (std::getline(logFile, line)){
+		if (std::regex_search(line, match, pattern)){
+			orig_filename = match[1].str();
+			//if (orig_filename.find(identifier) != std::string::npos){
+			//	cout << "Found filename: " << orig_filename << endl;
+			singlehit_file = file_line;
+			//	break;
+			//}
+		}
+	    }
+	
+        // this block finds the corresponding TPC clusters file
+        //std::ifstream singlehit_files(singlehit_runlist);
+        start = orig_filename.find("raw_");
+        end = orig_filename.find("_datawriter");
+        if (start != std::string::npos && end != std::string::npos && start < end) {
+            identifier = orig_filename.substr(start + 4, end - (start + 4));
+            cout << "identifier = " << identifier << endl;
+	    } else {
                 std::cout << "Error getting charge cluster file!" << std::endl;
                 continue;
                    }
-        std::string singlehit_file = "";
-        std::string file_line;
-        while (std::getline(singlehit_files, file_line)) { 
-            if (file_line.find(identifier) != std::string::npos) {
-                singlehit_file = file_line;
-                break;
-                }
-            }
+        //std::string singlehit_file = "";
+        bool foundFile = false;
+        for (int file_i = 0; file_i < filenames.size(); file_i++) {
+		if (filenames[file_i].find(identifier) != std::string::npos){
+	        	foundFile = true;
+			file_index = file_i;
+			break;		
+		}
+        }
+        if (!foundFile) {
+		cout << "Cannot find light file, skipping." << endl;
+		continue;
+		}
+            //}
+            
+	    //throw std::runtime_error("No input file path found in log file.");
+            //if (orig_filename != ""){
+            //    cout << "Found filename: " << orig_filename << endl;
+            //}
+            //if (orig_filename.find(identifier) != std::string::npos) {
+            //    cout << "Found filename: " << orig_filename << endl;
+            //    singlehit_file = file_line;   
+            //    break;
+            //    }
+            //}
         if (singlehit_file == ""){
             cout << "Cannot locate singlehit clusters file." << endl;
             continue;
@@ -158,7 +228,7 @@ void LowEnergyCLMatching_PDHD(){
             std::cerr << "Error: Cannot open ROOT file." << std::endl;
         }
 
-        TDirectory *dir = (TDirectory*)clusters_file->Get("ana");
+        TDirectory *dir = (TDirectory*)clusters_file->Get("r2");
         TTree *clusters_tree = nullptr;
         dir->GetObject("ClusterTree", clusters_tree);
          
@@ -207,7 +277,15 @@ void LowEnergyCLMatching_PDHD(){
             
             // combine results from each event
             vector_index = 0;
-            for (int j = lastLength; j < clusters_NOFTB_pre->size(); j++){
+            for (int j = 0; j < clusters_NOFTB_pre->size(); j++){
+		if (!(((*NumberOfPlane0)[vector_index]) && ((*NumberOfPlane1)[vector_index]))){
+			charge_nplanes.push_back(2);
+			//vector_index++;
+			//continue;
+                        }
+                else {
+                        charge_nplanes.push_back(3);
+                        }
 	        //charge_event_indices.push_back(charge_event_index);
                 clusters_NOFTB.push_back((*clusters_NOFTB_pre)[j]);
 		//all_charge_t.push_back(ChargeT0*dt + (*clusters_PeakTime)[vector_index]*dtcrp);
@@ -216,12 +294,6 @@ void LowEnergyCLMatching_PDHD(){
 		charge_PeakTime.push_back((*clusters_PeakTime)[vector_index]);
                 charge_Z.push_back((*clusters_Z)[vector_index]);
                 charge_Y.push_back((*clusters_Y)[vector_index]);
-                if (((*NumberOfPlane0)[vector_index]) && ((*NumberOfPlane1)[vector_index])) {
-			charge_nplanes.push_back(3);
-			}
-		else {
-			charge_nplanes.push_back(2);
-			}
                 // assign APA number to clusters, 
                 // account for incorrectly formatted NearOrFarToTheBeam branch
 		if (((*clusters_Z)[vector_index] < 230) && (clusters_NOFTB[vector_index] == 1)){
@@ -244,7 +316,7 @@ void LowEnergyCLMatching_PDHD(){
 		std::vector<int> charge_event_start_stop = {lastLength, static_cast<int>(charge_Z.size())-1};
 		charge_event_indices.push_back(charge_event_start_stop);
         charge_event_index++;
-        lastLength = clusters_NOFTB_pre->size();
+        lastLength = clusters_NOFTB.size();
         }
         clusters_file->Close(); 
         
@@ -305,7 +377,7 @@ void LowEnergyCLMatching_PDHD(){
         std::vector<std::vector<int>> all_cluster_indices;
         std::vector<int> cluster_indices;
 	
-	int nhit_limit_dt = 5;
+	int nhit_limit_dt = 10;
         for (int i = 0; i < pdsTimestamp.size(); i++){
 	    int nhit = 1;
 	    cluster_indices.push_back(i);
@@ -341,13 +413,15 @@ void LowEnergyCLMatching_PDHD(){
 	            {
 		        nhit++;
                         cluster_hit_indices.push_back(all_cluster_indices[i][k]);
-			if (nhit > nhit_limit) {break;}
+			//if (nhit > nhit_limit) {break;}
 		    }
 		} // end k loop
-                if (nhit == 1){
-		    hit_keep_indices.push_back(cluster_hit_indices);
-		    total_nhit1++;
-		}
+                //if (nhit == 1){
+		//    hit_keep_indices.push_back(cluster_hit_indices);
+		//    total_nhit1++;
+		//}
+		hit_keep_indices.push_back(cluster_hit_indices);
+		total_nhit1++;
                 cluster_hit_indices.clear();	
 	        nhit = 0;	 
 	     } // end j loop
@@ -414,7 +488,7 @@ void LowEnergyCLMatching_PDHD(){
 			}
 			if (!is_matched){break;}
  			total_cluster_matches++;
-		        if (total_cluster_matches > cluster_match_limit){break;}
+		        //if (total_cluster_matches > cluster_match_limit){break;}
                             totalMatches++;
 			    if (hit_keep_indices[j].size() == 1){
      			        charge_indices.push_back(k);
@@ -434,7 +508,7 @@ void LowEnergyCLMatching_PDHD(){
 	cout << "# of double PDS hit coincidences = " << charge_indices.size() << endl;
         }
 	// save results to ROOT file
-        std::string output_filename = "pdhd_"+run+"_LowECLMatching_test2"+".root"; 
+        std::string output_filename = "pdhd_"+run+"_LowECLMatching_r2"+".root"; 
         TFile *outputFile = new TFile(output_filename.c_str(), "UPDATE");
         TTree *results_tree = (TTree*) outputFile->Get("results");
         TTree *pds_tree = (TTree*) outputFile->Get("isolated_pds"); 
